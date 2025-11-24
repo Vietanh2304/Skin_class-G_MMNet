@@ -1,0 +1,94 @@
+nohup: ignoring input
+
+CondaError: Run 'conda init' before 'conda activate'
+
+/home/ibmelab/Documents/G_MMNet/src/augmentations.py:24: UserWarning: Argument(s) 'min_holes, max_holes, min_height, max_height, min_width, max_width' are not valid for transform CoarseDropout
+  A.CoarseDropout(min_holes=4, max_holes=8, min_height=cfg.IMG_SIZE//16, max_height=cfg.IMG_SIZE//8, min_width=cfg.IMG_SIZE//16, max_width=cfg.IMG_SIZE//8, p=0.5),
+Unexpected keys (bn2.num_batches_tracked, bn2.bias, bn2.running_mean, bn2.running_var, bn2.weight, classifier.bias, classifier.weight, conv_head.weight) found while loading pretrained weights. This may be expected if model is being adapted.
+
+✅ Config V27 (Focal Loss + Mixup - Train từ đầu) Ready:
+   🔥 ĐÃ CHỈ ĐỊNH CHẠY TRÊN: cuda:1
+   Model: EffNetB1-Stem + Asymmetric Mamba (192D/768D)
+   🔥 Chiến lược Kappa: BẬT Focal Loss (gamma=2.0)
+   🔥 Chiến lược Kappa: BẬT Mixup/Cutmix (p=0.5)
+   🔥 LR: Head=0.0002, Backbone=2e-05 (Ổn định)
+======================================================================
+DATA PREPROCESSING (DÙNG CHO HAM10000)
+======================================================================
+✅ Data preprocessing (HAM10000) loaded
+======================================================================
+
+======================================================================
+AUGS: V9 - Sửa lỗi p=0.5 (Thêm A.Resize vào trước)
+======================================================================
+✅ Augmentation: train_tf (Resize p=1.0 + RandomResizedCrop p=0.5 ĐÃ SỬA)
+✅ Augmentation: valid_tf (Resize)
+======================================================================
+
+======================================================================
+MODEL V24 - 🔥 EffNetB1-Stem + Asymmetric Mamba (192D/768D)
+======================================================================
+======================================================================
+✅ MODEL V24 READY - (EffNetB1-Stem + Asymmetric Mamba)
+======================================================================
+
+======================================================================
+MAIN TRAINING - V27 (Focal Loss + Mixup, cosine LR)
+🔥 Dataset: HAM10000 | Folds: [0, 1, 2, 3, 4]
+🔥 CHẠY TRÊN THIẾT BỊ: cuda:1
+======================================================================
+✅ Đã tải 10015 mẫu. Các lớp: {'akiec': 0, 'bcc': 1, 'bkl': 2, 'df': 3, 'mel': 4, 'nv': 5, 'vasc': 6}
+
+✅ Đã tạo 5 folds (StratifiedKFold)
+
+================================================================================
+🔥 BẮT ĐẦU FOLD 1/5
+================================================================================
+  Train: 8012
+  Val:   2003
+  ✅ Metadata processed (HAM10000):\n     Total features: 5
+  ✅ Meta-features: Num=1, Cat=4 [5, 4, 16, 3]
+  [Dataset] Created: 8012 samples
+  [Dataset] Created: 2003 samples
+  ✅ Dataloaders created.
+  ✅ Đã dùng FocalLoss (gamma=2.0).
+
+============================================================
+🔥 BUILDING G_MMNet V24 (EffNetB1-Stem + Asymmetric Mamba)
+============================================================
+  [Dims] Fine: 192D | Coarse: 768D
+  [Meta] Encoder: 1 num + 4 cat → 256D
+  [Stem] EfficientNet-B1 (Pretrained): Fine=40ch, Coarse=112ch
+    [Fine] Proj -> 192D
+    [Coarse] Proj -> 768D
+  [Towers] Building 4 layers × 2 streams (Adaptive FiLM)...\n
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+    [A-FiLM] Adaptive FiLM created (meta + img → gamma/beta)
+  [Cross-Attn] Dense cross-scale (192D/768D): 4 layers
+  [Fusion V24] Advanced Multi-Scale (Chiếu 192D -> 768D)
+  [Head] 3-layer: 768→512→256→7
+  [Aux Heads] Đã TẮT (Thiết kế V24)
+
+============================================================
+✅ G_MMNet V24 (Asymmetric Pre-trained) READY
+============================================================
+✅ Optimizer: AdamW (4-Part Smart Weight Decay)
+✅ Scheduler: CosineAnnealingLR (Max LR: 0.0002)
+
+   (Validating with x2 TTA: Original + Horizontal Flip...)
+/home/ibmelab/anaconda3/envs/gmm_env/lib/python3.11/site-packages/torch/optim/lr_scheduler.py:232: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)

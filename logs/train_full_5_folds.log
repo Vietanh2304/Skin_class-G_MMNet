@@ -1,0 +1,13 @@
+nohup: ignoring input
+/home/ibmelab/Documents/G_MMNet/src/augmentations.py:14: UserWarning: Argument(s) 'min_holes, max_holes, min_height, max_height, min_width, max_width' are not valid for transform CoarseDropout
+  A.CoarseDropout(min_holes=4, max_holes=8, min_height=cfg.IMG_SIZE//16, max_height=cfg.IMG_SIZE//8, min_width=cfg.IMG_SIZE//16, max_width=cfg.IMG_SIZE//8, p=0.5),
+Traceback (most recent call last):
+  File "/home/ibmelab/Documents/G_MMNet/train.py", line 18, in <module>
+    from src.model import G_MMNet
+  File "/home/ibmelab/Documents/G_MMNet/src/model.py", line 6, in <module>
+    from mamba_ssm import Mamba
+  File "/home/ibmelab/Documents/G_MMNet/venv_gmm/lib/python3.11/site-packages/mamba_ssm/__init__.py", line 3, in <module>
+    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn
+  File "/home/ibmelab/Documents/G_MMNet/venv_gmm/lib/python3.11/site-packages/mamba_ssm/ops/selective_scan_interface.py", line 20, in <module>
+    import selective_scan_cuda
+ImportError: /home/ibmelab/Documents/G_MMNet/venv_gmm/lib/python3.11/site-packages/selective_scan_cuda.cpython-311-x86_64-linux-gnu.so: undefined symbol: _ZN3c104cuda9SetDeviceEab
