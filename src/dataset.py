@@ -4,111 +4,150 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-from src.config import cfg # Import cfg
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from src.config import cfg
 
 print("="*70)
-print("DATA PREPROCESSING (DÙNG CHO HAM10000)")
+print("DATA PREPROCESSING (HAM10000 - SAFE MODE)")
 print("="*70)
 
-def preprocess_metadata_for_transformer(df_train, df_val, df_test):
+def preprocess_metadata_for_transformer(df_train, df_val, df_test=None):
+    """
+    Phiên bản AN TOÀN TUYỆT ĐỐI: 
+    1. Gom tất cả dữ liệu lại để fit LabelEncoder (tránh sót nhãn lạ ở tập Val/Test).
+    2. Xử lý NaN triệt để cho cả cột số và cột phân loại.
+    """
+    print("⚡ Bắt đầu xử lý Metadata...")
+    
+    # Copy để không ảnh hưởng dữ liệu gốc
     df_train = df_train.copy()
     df_val = df_val.copy()
-    df_test = df_test.copy()
+    if df_test is not None:
+        df_test = df_test.copy()
     
-    # Các cột của HAM10000
-    raw_cat_cols = ["dx_type", "sex", "localization"]
-    raw_num_cols = ["age"]
+    # Định nghĩa cột
+    cat_cols = ["dx_type", "sex", "localization"]
+    num_cols = ["age"]
     
-    final_num_cols = []
-    final_cat_cols = []
+    # 1. GOM DỮ LIỆU (QUAN TRỌNG ĐỂ KHÔNG BỊ LỖI INDEX)
+    # Gom tất cả lại để LabelEncoder học được mọi giá trị có thể xuất hiện
+    all_dfs = [df_train, df_val]
+    if df_test is not None:
+        all_dfs.append(df_test)
     
-    # Process numerical
-    for c in raw_num_cols:
-        for df in [df_train, df_val, df_test]:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
+    full_df = pd.concat(all_dfs, axis=0, ignore_index=True)
+    
+    # 2. XỬ LÝ SỐ (NUMERICAL)
+    for c in num_cols:
+        # Ép kiểu số, lỗi thành NaN
+        full_df[c] = pd.to_numeric(full_df[c], errors='coerce')
         
-        flag_col = f"{c}_MISSING_FLAG"
-        for df in [df_train, df_val, df_test]:
-            df[flag_col] = df[c].isna().astype(int).astype(str)
-            df[flag_col] = df[flag_col].replace('1', 'MISSING').replace('0', 'PRESENT')
-        final_cat_cols.append(flag_col)
+        # Điền tuổi thiếu bằng trung bình (An toàn hơn median nếu dữ liệu ít)
+        mean_val = full_df[c].mean()
+        if pd.isna(mean_val): mean_val = 50.0 # Fallback
         
-        median_val = df_train[c].median()
-        if pd.isna(median_val):
-            median_val = 50.0
-        for df in [df_train, df_val, df_test]:
-            df[c] = df[c].fillna(median_val)
+        full_df[c] = full_df[c].fillna(mean_val)
         
-        final_num_cols.append(c)
-    
-    scaler = MinMaxScaler()
-    df_train[final_num_cols] = scaler.fit_transform(df_train[final_num_cols])
-    df_val[final_num_cols] = scaler.transform(df_val[final_num_cols])
-    df_test[final_num_cols] = scaler.transform(df_test[final_num_cols])
-    
-    all_cat_cols = raw_cat_cols + final_cat_cols
+        # Chuẩn hóa (StandardScaler tốt hơn MinMaxScaler cho Transformer)
+        scaler = StandardScaler()
+        full_df[[c]] = scaler.fit_transform(full_df[[c]])
+
+    # 3. XỬ LÝ PHÂN LOẠI (CATEGORICAL)
     cat_dims = []
+    encoders = {}
     
-    for c in all_cat_cols:
-        for df in [df_train, df_val, df_test]:
-            df[c] = df[c].astype(str).replace('nan', 'MISSING')
-            df[c] = df[c].replace('UNK', 'MISSING').replace('unknown', 'MISSING')
+    for c in cat_cols:
+        # Chuyển về string và xử lý NaN
+        full_df[c] = full_df[c].fillna("unknown").astype(str)
+        full_df[c] = full_df[c].replace(['nan', 'NaN', 'UNK'], "unknown")
         
+        # Fit LabelEncoder trên TOÀN BỘ dữ liệu
         le = LabelEncoder()
-        train_cats = df_train[c].unique()
-        le.fit(np.append(train_cats, 'UNKNOWN'))
+        le.fit(full_df[c])
         
-        df_train[c] = le.transform(df_train[c])
-        df_val[c] = df_val[c].map(lambda s: s if s in le.classes_ else 'UNKNOWN')
-        df_val[c] = le.transform(df_val[c].astype(str))
-        df_test[c] = df_test[c].map(lambda s: s if s in le.classes_ else 'UNKNOWN')
-        df_test[c] = le.transform(df_test[c].astype(str))
-        cat_dims.append(len(le.classes_))
+        # Transform
+        full_df[c] = le.transform(full_df[c])
+        
+        # Lưu lại số lượng class (Cộng thêm 1 để dự phòng cho Embedding)
+        n_classes = len(le.classes_)
+        cat_dims.append(n_classes)
+        encoders[c] = le
+        print(f"   > Cột '{c}': {n_classes} classes -> {le.classes_}")
+
+    # 4. TRẢ DỮ LIỆU VỀ TỪNG PHẦN
+    # Cắt full_df ra lại thành train, val, test
+    len_train = len(df_train)
+    len_val = len(df_val)
     
-    meta_cols = final_num_cols + all_cat_cols
+    train_meta_df = full_df.iloc[:len_train].copy()
+    val_meta_df = full_df.iloc[len_train : len_train + len_val].copy()
     
-    print(f"  ✅ Metadata processed (HAM10000):\\n     Total features: {len(meta_cols)}")
+    test_meta_df = None
+    if df_test is not None:
+        test_meta_df = full_df.iloc[len_train + len_val :].copy()
     
-    return (df_train[meta_cols], df_val[meta_cols], df_test[meta_cols]), cat_dims, len(final_num_cols)
+    # Chọn cột để trả về
+    meta_cols = num_cols + cat_cols
+    
+    # Helper: Chuyển DataFrame thành Tensor
+    def to_tensor(df):
+        return torch.tensor(df[meta_cols].values, dtype=torch.float32)
+
+    train_tensor = to_tensor(train_meta_df)
+    val_tensor = to_tensor(val_meta_df)
+    test_tensor = to_tensor(test_meta_df) if test_meta_df is not None else None
+    
+    print(f"✅ Metadata đã xử lý xong! (Num: {len(num_cols)}, Cat: {len(cat_cols)})")
+    return (train_tensor, val_tensor, test_tensor), cat_dims, len(num_cols)
 
 
 class HAM10000Dataset(Dataset):
-    """Dataset gốc trả về (img, meta, label)"""
-    def __init__(self, df, meta_df, img_root, label_map, transform=None):
+    def __init__(self, df, meta_data, img_root, label_map, transform=None):
         self.df = df.reset_index(drop=True)
-        self.meta_df = meta_df.reset_index(drop=True)
-        self.img_root = img_root # Đây là một list [root1, root2]
-        self.transform = transform
+        self.meta_data = meta_data # Đây là Tensor
+        self.img_root = img_root   # List các đường dẫn ảnh
         self.label_map = label_map
-        print(f"  [Dataset] Created: {len(self.df)} samples")
-    
+        self.transform = transform
+        
     def __len__(self):
         return len(self.df)
     
     def __getitem__(self, idx):
+        # 1. Lấy thông tin cơ bản
         row = self.df.iloc[idx]
+        img_id = str(row['image_id']).strip()
         
-        # Logic của HAM10000
-        img_id = str(row['image_id']).strip() + ".jpg"
-        meta = self.meta_df.iloc[idx].values.astype(np.float32)
-        label = self.label_map[row['dx']]
-        
+        # 2. Tìm ảnh (Hỗ trợ nhiều thư mục & đuôi file)
         img_path = None
-        for root in self.img_root: # Lặp qua list các thư mục gốc
-            potential_path = os.path.join(root, img_id)
-            if os.path.exists(potential_path):
-                img_path = potential_path; break
+        extensions = [".jpg", ".jpeg", ".png"]
+        
+        if isinstance(self.img_root, str):
+            self.img_root = [self.img_root]
+            
+        for root in self.img_root:
+            for ext in extensions:
+                temp_path = os.path.join(root, img_id + ext)
+                if os.path.exists(temp_path):
+                    img_path = temp_path
+                    break
+            if img_path: break
+            
+        # 3. Load ảnh (Có Fallback nếu lỗi)
         try:
-            if img_path: img = np.array(Image.open(img_path).convert("RGB"))
-            else: img = np.zeros((cfg.IMG_SIZE, cfg.IMG_SIZE, 3), dtype=np.uint8)
+            if img_path:
+                img = np.array(Image.open(img_path).convert("RGB"))
+            else:
+                # Tạo ảnh đen nếu không tìm thấy (tránh crash)
+                img = np.zeros((cfg.IMG_SIZE, cfg.IMG_SIZE, 3), dtype=np.uint8)
         except Exception:
             img = np.zeros((cfg.IMG_SIZE, cfg.IMG_SIZE, 3), dtype=np.uint8)
         
+        # 4. Augmentation
         if self.transform:
             img = self.transform(image=img)['image']
+            
+        # 5. Lấy Metadata & Label
+        meta = self.meta_data[idx] # Tensor đã xử lý ở trên
+        label = torch.tensor(self.label_map[row['dx']], dtype=torch.long)
         
-        return img, torch.tensor(meta, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
-
-print("✅ Data preprocessing (HAM10000) loaded")
-print("="*70 + "\n")
+        return img, meta, label
